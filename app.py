@@ -1,59 +1,84 @@
-from flask import Flask, jsonify
+from flask import Flask, jsonify, request
 from flask_sqlalchemy import SQLAlchemy
-from sqlalchemy.orm import validates
+from sqlalchemy.exc import IntegrityError
+from flask_migrate import Migrate
 
 app = Flask(__name__)
-app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///instance/pizzadatabase.db'
+app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///pizza.db'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-
 db = SQLAlchemy(app)
+migrate = Migrate(app, db)
 
 class Restaurant(db.Model):
-    __tablename__ = 'restaurants'
     id = db.Column(db.Integer, primary_key=True)
-    name = db.Column(db.String(128), nullable=False, unique=True)
-    address = db.Column(db.String(255), nullable=False)
+    name = db.Column(db.String(50), unique=True, nullable=False)
+    address = db.Column(db.String(100), nullable=False)
     pizzas = db.relationship('RestaurantPizza', back_populates='restaurant')
 
-    @validates('name')
-    def validate_name(self, key, name):
-        if len(name) > 50:
-            raise ValueError("The name must be less than 50 words in length.")
-        return name
-
 class Pizza(db.Model):
-    __tablename__ = 'pizzas'
     id = db.Column(db.Integer, primary_key=True)
-    name = db.Column(db.String(128), nullable=False)
+    name = db.Column(db.String(50), nullable=False)
+    ingredients = db.Column(db.String(200), nullable=False)
     restaurants = db.relationship('RestaurantPizza', back_populates='pizza')
 
 class RestaurantPizza(db.Model):
-    __tablename__ = 'restaurant_pizza'
     id = db.Column(db.Integer, primary_key=True)
-    restaurant_id = db.Column(db.Integer, db.ForeignKey('restaurants.id'), nullable=False)
-    pizza_id = db.Column(db.Integer, db.ForeignKey('pizzas.id'), nullable=False)
     price = db.Column(db.Integer, nullable=False)
-
-    @validates('price')
-    def validate_price(self, key, price):
-        if not (1 <= price <= 30):
-            raise ValueError("Price must be between 1 and 30.")
-        return price
-
+    restaurant_id = db.Column(db.Integer, db.ForeignKey('restaurant.id'), nullable=False)
+    pizza_id = db.Column(db.Integer, db.ForeignKey('pizza.id'), nullable=False)
     restaurant = db.relationship('Restaurant', back_populates='pizzas')
     pizza = db.relationship('Pizza', back_populates='restaurants')
+
+    __table_args__ = (
+        db.CheckConstraint('price >= 1 AND price <= 30', name='price_check'),
+    )
 
 @app.route('/restaurants', methods=['GET'])
 def get_restaurants():
     restaurants = Restaurant.query.all()
-    restaurants_list = [{
-        "id": restaurant.id,
-        "name": restaurant.name,
-        "address": restaurant.address
-    } for restaurant in restaurants]
-    return jsonify(restaurants_list)
+    return jsonify([{'id': r.id, 'name': r.name, 'address': r.address} for r in restaurants])
 
-if __name__ == '__main__':
-    db.create_all()
-    app.run(debug=True)
+@app.route('/restaurants/<int:id>', methods=['GET'])
+def get_restaurant(id):
+    restaurant = Restaurant.query.get(id)
+    if restaurant:
+        return jsonify({
+            "id": restaurant.id,
+            "name": restaurant.name,
+            "address": restaurant.address,
+            "pizzas": [
+                {"id": rp.pizza.id, "name": rp.pizza.name, "ingredients": rp.pizza.ingredients}
+                for rp in restaurant.pizzas
+            ]
+        })
+    else:
+        return jsonify({"error": "Restaurant not found"}), 404
+
+@app.route('/restaurants/<int:id>', methods=['DELETE'])
+def delete_restaurant(id):
+    restaurant = Restaurant.query.get(id)
+    if restaurant:
+        db.session.delete(restaurant)
+        db.session.commit()
+        return '', 204
+    else:
+        return jsonify({"error": "Restaurant not found"}), 404
+
+@app.route('/pizzas', methods=['GET'])
+def get_pizzas():
+    pizzas = Pizza.query.all()
+    return jsonify([{'id': p.id, 'name': p.name, 'ingredients': p.ingredients} for p in pizzas])
+
+@app.route('/restaurant_pizzas', methods=['POST'])
+def create_restaurant_pizza():
+    data = request.json
+    try:
+        restaurant_pizza = RestaurantPizza(price=data['price'], pizza_id=data['pizza_id'], restaurant_id=data['restaurant_id'])
+        db.session.add(restaurant_pizza)
+        db.session.commit()
+        pizza = Pizza.query.get(restaurant_pizza.pizza_id)
+        return jsonify({'id': pizza.id, 'name': pizza.name, 'ingredients': pizza.ingredients})
+    except IntegrityError:
+        db.session.rollback()
+        return jsonify({"errors": ["validation errors"]}), 400
 
