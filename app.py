@@ -32,11 +32,16 @@ class RestaurantPizza(db.Model):
     __table_args__ = (
         db.CheckConstraint('price >= 1 AND price <= 30', name='price_check'),
     )
+@app.route('/')
+def home():
+    return 'Karibu to the Pizza Restaurant API! 🍕 For a list of restaurants, visit /restaurants. For a list of pizzas go to /pizzas'
+    
 
 @app.route('/restaurants', methods=['GET'])
 def get_restaurants():
     restaurants = Restaurant.query.all()
-    return jsonify([{'id': r.id, 'name': r.name, 'address': r.address} for r in restaurants])
+    return jsonify([{
+        'id': r.id, 'name': r.name, 'address': r.address} for r in restaurants])
 
 @app.route('/restaurants/<int:id>', methods=['GET'])
 def get_restaurant(id):
