@@ -2,10 +2,12 @@ from flask import Flask
 from flask_sqlalchemy import SQLAlchemy
 
 app = Flask(__name__)
-app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///pizzadb.db'
+app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///pizzadatabase.db'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
+
 db = SQLAlchemy(app)
+
 
 class Restaurant(db.Model):
     __tablename__ = 'restaurants'
@@ -19,6 +21,7 @@ class Pizza(db.Model):
     name = db.Column(db.String(128), nullable=False)
     restaurants = db.relationship('RestaurantPizza', back_populates='pizza')
 
+
 class RestaurantPizza(db.Model):
     __tablename__ = 'restaurant_pizza'
     id = db.Column(db.Integer, primary_key=True)
@@ -26,6 +29,10 @@ class RestaurantPizza(db.Model):
     pizza_id = db.Column(db.Integer, db.ForeignKey('pizzas.id'), nullable=False)
     restaurant = db.relationship('Restaurant', back_populates='pizzas')
     pizza = db.relationship('Pizza', back_populates='restaurants')
+
+@app.route('/')
+def hello():
+    return "Hello, welcome to the Pizza Database!"
 
 if __name__ == '__main__':
     db.create_all()
