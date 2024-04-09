@@ -1,5 +1,5 @@
 # Flask Pizza Restaurant API
-The Flask Pizza Restaurant API is a REST API built with Flask to manage pizza restaurant data.
+The Flask Pizza Restaurant API is a RESTful API built with Flask to manage pizza restaurant data.
 
 # Features
 - View a list of all restaurants and pizzas.
